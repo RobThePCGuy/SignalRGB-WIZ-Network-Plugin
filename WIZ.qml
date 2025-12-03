@@ -1,188 +1,127 @@
 Item {
     anchors.fill: parent
 
-    Rectangle{
-        anchors{
-            top: parent.top
-            right: parent.right
-        }
+    // Instructions Panel
+    Rectangle {
+        anchors { top: parent.top; right: parent.right }
         width: 300
-        height: linkingCol.childrenRect.height + linkingCol.topPadding + linkingCol.bottomPadding
+        height: instructions.height + 20
         color: theme.background3
         radius: theme.radius
-        Column{
-            id: linkingCol
+
+        Column {
+            id: instructions
             spacing: 5
             padding: 10
             width: parent.width
 
-            Label{
-                font{
-                    pixelSize: 16
-                    family: theme.primaryfont
-                    weight: Font.Bold
-                }
+            Label {
+                font { pixelSize: 16; family: theme.primaryfont; weight: Font.Bold }
                 color: theme.primarytextcolor
-                text: "Linking Instructions"
+                text: "Setup Requirements"
             }
-            Label{
-                font{
-                    pixelSize: 14
-                    family: theme.secondarytextcolor
-                }
+
+            Label {
+                font { pixelSize: 14; family: theme.primaryfont }
                 width: parent.width - 20
                 color: theme.secondarytextcolor
                 textFormat: Text.MarkdownText
                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                text: 
-"* The Device must be on a 2.4ghz WIFI network. \n
-* The local udp network communication must be active."
+                text: "- Device must be on 2.4GHz WiFi\n- Local UDP communication must be enabled"
             }
-
         }
     }
 
-    Column{
+    // Main Content
+    Column {
         width: parent.width
         height: parent.height
         spacing: 10
 
-		Rectangle{
-			id: scanningItem
-			height: 50
-			width: childrenRect.width + 15
-			visible: service.controllers.length === 0
-			color: theme.background3
-			radius: theme.radius
+        // Scanning Indicator
+        Rectangle {
+            id: scanningItem
+            height: 50
+            width: childrenRect.width + 15
+            visible: service.controllers.length === 0
+            color: theme.background3
+            radius: theme.radius
 
-			BusyIndicator {
-				id: scanningIndicator
-				height: 30
-				anchors.verticalCenter: parent.verticalCenter
-				width: parent.height
-				Material.accent: "#88FFFFFF"
-				running: scanningItem.visible
-			}  
+            BusyIndicator {
+                id: scanningIndicator
+                height: 30
+                width: parent.height
+                anchors.verticalCenter: parent.verticalCenter
+                Material.accent: "#88FFFFFF"
+                running: scanningItem.visible
+            }
 
-			Column{
-				width: childrenRect.width
-				anchors.left: scanningIndicator.right
-				anchors.verticalCenter: parent.verticalCenter
+            Column {
+                anchors { left: scanningIndicator.right; verticalCenter: parent.verticalCenter }
+                Text {
+                    color: theme.secondarytextcolor
+                    text: "Searching for WIZ devices..."
+                    font { pixelSize: 14; family: "Montserrat" }
+                }
+                Text {
+                    color: theme.secondarytextcolor
+                    text: "This may take a moment..."
+                    font { pixelSize: 14; family: "Montserrat" }
+                }
+            }
+        }
 
-				Text{
-					color: theme.secondarytextcolor
-					text: "Searching network for WIZ Devices..." 
-					font.pixelSize: 14
-					font.family: "Montserrat"
-				}
-				Text{
-					color: theme.secondarytextcolor
-					text: "This may take several minutes..." 
-					font.pixelSize: 14
-					font.family: "Montserrat"
-				}
-			}
-		}
-    
-        Repeater{
-            model: service.controllers          
+        // Device List
+        Repeater {
+            model: service.controllers
 
             delegate: Item {
-                id: root
                 width: 350
                 height: content.height
                 property var device: model.modelData.obj
 
                 Rectangle {
-                    width: parent.width
-                    height: parent.height
+                    anchors.fill: parent
                     color: Qt.lighter(theme.background2, 1.3)
                     radius: 5
                 }
 
-                Column{
+                Column {
                     id: content
                     width: parent.width
                     padding: 15
                     spacing: 5
 
-                    Row{
-                        width: parent.width
-                        height: childrenRect.height
+                    // Device Name
+                    Text {
+                        color: theme.primarytextcolor
+                        text: device.modelName
+                        font { pixelSize: 16; family: "Poppins"; weight: Font.Bold }
+                    }
 
-                        Column{
-                            id: leftCol
-                            width: 260
-                            height: childrenRect.height
-                            spacing: 5
+                    // ID and Room
+                    Row {
+                        spacing: 5
+                        Text { color: theme.secondarytextcolor; text: "ID: " + device.id }
+                        Text { color: theme.secondarytextcolor; text: "|" }
+                        Text { color: theme.secondarytextcolor; text: "Room: " + (device.roomId || "N/A") }
+                    }
 
-                            Text{
-                                color: theme.primarytextcolor
-                                text: device.modelName
-                                font.pixelSize: 16
-                                font.family: "Poppins"
-                                font.weight: Font.Bold
-                            }
+                    // IP and Firmware
+                    Row {
+                        spacing: 5
+                        Text { color: theme.secondarytextcolor; text: "IP: " + (device.ip || "Unknown") }
+                        Text { color: theme.secondarytextcolor; text: "|" }
+                        Text { color: theme.secondarytextcolor; text: "FW: " + device.fwVersion }
+                    }
 
-                            Row{
-                                spacing: 5
-                                Text{
-                                    color: theme.secondarytextcolor
-                                    text: "Id: " + device.id
-                                }
-
-                                Text{
-                                    color: theme.secondarytextcolor
-                                    text: "|"
-                                }
-
-                                Text{
-                                    color: theme.secondarytextcolor
-                                    text: "Room ID: " + device.roomid
-                                }  
-                            }
-
-                            Row{
-                                spacing: 5
-                                Text{
-                                    color: theme.secondarytextcolor
-                                    text: "Ip Address: " + (device.ip != "" ? device.ip : "Unknown")
-                                }
-
-                                Text{
-                                    color: theme.secondarytextcolor
-                                    text: "|"
-                                }
-
-                                Text{
-                                    color: theme.secondarytextcolor
-                                    text: "Firmware Version: " + device.fwVersion
-                                }  
-                            }
-
-                            Text{
-                                color: theme.secondarytextcolor
-                                text: `Supports DreamView Protocol: `
-                            }
-
-                            Text{
-                                color: theme.secondarytextcolor
-                                text: ``
-                            }
-
-                            // Text{
-                            //     color: theme.warn
-                            //     width: parent.width
-                            //     visible: false
-                            //     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                            //     text: `This device doesn't support Govee's Razer, or Dreamview protocols. SignalRGB is unable to control it...`
-                            // }
-
-                        }
-
+                    // RGB Support
+                    Text {
+                        color: device.isRGB ? theme.secondarytextcolor : theme.warn
+                        text: device.isRGB ? "RGB Supported" : "Limited color support (TW only)"
                     }
                 }
-            }  
+            }
         }
     }
 }

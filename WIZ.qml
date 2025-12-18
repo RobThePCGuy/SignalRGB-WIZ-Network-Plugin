@@ -71,6 +71,14 @@ Item {
             }
         }
 
+        // Device Count
+        Text {
+            visible: service.controllers.length > 0
+            color: theme.primarytextcolor
+            text: "Found " + service.controllers.length + " device(s)"
+            font { pixelSize: 14; family: "Poppins"; weight: Font.Bold }
+        }
+
         // Device List
         Repeater {
             model: service.controllers
@@ -115,10 +123,14 @@ Item {
                         Text { color: theme.secondarytextcolor; text: "FW: " + device.fwVersion }
                     }
 
-                    // RGB Support
+                    // Color Support
                     Text {
                         color: device.isRGB ? theme.secondarytextcolor : theme.warn
-                        text: device.isRGB ? "RGB Supported" : "Limited color support (TW only)"
+                        text: device.isRGB
+                            ? "Full RGB Color"
+                            : device.isTW
+                                ? "Color Temperature (2200K-6500K)"
+                                : "Basic Dimming"
                     }
                 }
             }

@@ -19,6 +19,8 @@ forceColor:readonly
 forcedColor:readonly
 minBrightness:readonly
 dimmColor:readonly
+colorTemp:readonly
+useColorTemp:readonly
 */
 
 export function ControllableParameters() {
@@ -29,16 +31,21 @@ export function ControllableParameters() {
 		{"property": "forcedColor", "group": "lighting", "label": "Forced Color", "min": "0", "max": "360", "type": "color", "default": "#009bde"},
 		{"property": "minBrightness", "group": "lighting", "label": "Minimum Brightness", "min": "1", "max": "100", "type": "number", "default": "10"},
 		{"property": "dimmColor", "group": "lighting", "label": "Color when dimmed", "min": "0", "max": "360", "type": "color", "default": "#010101"},
+		{"property": "useColorTemp", "group": "lighting", "label": "Use Color Temperature", "type": "boolean", "default": "false"},
+		{"property": "colorTemp", "group": "lighting", "label": "Color Temperature (K)", "min": "2200", "max": "6500", "type": "number", "default": "4000"},
 	];
 }
 
 // State
 let wizProtocol = null;
 let lastBroadcast = 0;
+let discoveryAttempts = 0;
 const BROADCAST_INTERVAL = 60000;
+const INITIAL_DISCOVERY_INTERVAL = 3000;
+const MAX_INITIAL_ATTEMPTS = 5;
 const WIZ_PORT = 38900;
 
-// Device Library
+// Device Library - Common WIZ module names
 const WIZDeviceLibrary = {
 	"ESP03_SHRGB3_01ABI": {
 		productName: "WRGB LED Strip",
@@ -46,7 +53,27 @@ const WIZDeviceLibrary = {
 	},
 	"ESP15_SHTW1C_01": {
 		productName: "Tunable White Bulb",
+		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?",
+	},
+	"ESP01_SHRGB1C_31": {
+		productName: "RGB Bulb A19",
+		imageUrl: "https://www.assets.signify.com/is/image/Signify/046677603548-?"
+	},
+	"ESP01_SHRGBC_01": {
+		productName: "RGB Bulb",
+		imageUrl: "https://www.assets.signify.com/is/image/Signify/046677603548-?"
+	},
+	"ESP56_SHTW3_01": {
+		productName: "Tunable White BR30",
 		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?"
+	},
+	"ESP17_SHTW9_01": {
+		productName: "Tunable White A21",
+		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?"
+	},
+	"ESP03_SHRGB1W_01": {
+		productName: "RGBW Bulb",
+		imageUrl: "https://www.assets.signify.com/is/image/Signify/046677603548-?"
 	}
 };
 
@@ -63,7 +90,7 @@ export function Initialize() {
 	device.setSize(1, 1);
 	device.setControllableLeds(["LED 1"], [[0, 0]]);
 
-	wizProtocol = new WIZProtocol(controller.ip, controller.port || WIZ_PORT);
+	wizProtocol = new WIZProtocol(controller.ip, controller.port || WIZ_PORT, controller.isTW);
 }
 
 export function Render() {
@@ -127,8 +154,13 @@ export function DiscoveryService() {
 		}
 
 		const now = Date.now();
-		if (now - lastBroadcast >= BROADCAST_INTERVAL) {
+		const interval = discoveryAttempts < MAX_INITIAL_ATTEMPTS
+			? INITIAL_DISCOVERY_INTERVAL
+			: BROADCAST_INTERVAL;
+
+		if (now - lastBroadcast >= interval) {
 			lastBroadcast = now;
+			discoveryAttempts++;
 			this.CheckForDevices();
 		}
 	};
@@ -175,7 +207,8 @@ class WIZDevice {
 		this.id = value.id;
 		this.ip = value.ip;
 		this.port = value.port || WIZ_PORT;
-		this.initialized = false;
+		this.configRetries = 0;
+		this.lastConfigRequest = 0;
 		this.deviceInfoLoaded = false;
 		this.announced = false;
 		this.wiztype = null;
@@ -218,9 +251,15 @@ class WIZDevice {
 	}
 
 	update() {
-		if (!this.initialized) {
-			this.initialized = true;
-			service.broadcast(JSON.stringify({method: "getSystemConfig", id: 1}), this.ip);
+		const now = Date.now();
+
+		// Request system config if not loaded (with retry logic)
+		if (!this.deviceInfoLoaded && this.configRetries < 3) {
+			if (now - this.lastConfigRequest > 2000) {
+				this.lastConfigRequest = now;
+				this.configRetries++;
+				service.broadcast(JSON.stringify({method: "getSystemConfig", id: 1}), this.ip);
+			}
 		}
 
 		if (this.deviceInfoLoaded && !this.announced) {
@@ -233,22 +272,46 @@ class WIZDevice {
 
 // WIZ Protocol Handler
 class WIZProtocol {
-	constructor(ip, port) {
+	constructor(ip, port, isTW) {
 		this.ip = ip;
 		this.port = port;
-		this.lastColor = {r: -1, g: -1, b: -1, brightness: -1};
+		this.isTW = isTW;
+		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1};
 	}
 
 	setPilot(r, g, b) {
 		const brightness = device.getBrightness ? device.getBrightness() : 100;
-		const {lastColor} = this;
+		const {lastState} = this;
 
-		// Skip if unchanged
-		if (lastColor.r === r && lastColor.g === g && lastColor.b === b && lastColor.brightness === brightness) {
+		// Use color temperature mode for TW-only devices or when user enables it
+		if (this.isTW || useColorTemp) {
+			const temp = colorTemp || 4000;
+
+			// Skip if unchanged
+			if (lastState.temp === temp && lastState.brightness === brightness) {
+				return;
+			}
+
+			Object.assign(lastState, {r: -1, g: -1, b: -1, brightness, temp});
+
+			// Use dim brightness when off/black
+			const isOff = r < 1 && g < 1 && b < 1;
+			const finalBrightness = isOff ? (minBrightness || 10) : brightness;
+
+			this.send({
+				method: "setPilot",
+				params: {temp, dimming: finalBrightness}
+			});
 			return;
 		}
 
-		Object.assign(lastColor, {r, g, b, brightness});
+		// RGB mode
+		// Skip if unchanged
+		if (lastState.r === r && lastState.g === g && lastState.b === b && lastState.brightness === brightness) {
+			return;
+		}
+
+		Object.assign(lastState, {r, g, b, brightness, temp: -1});
 
 		// Use dim color when off/black
 		const isOff = r < 1 && g < 1 && b < 1;
@@ -257,7 +320,7 @@ class WIZProtocol {
 
 		this.send({
 			method: "setPilot",
-			params: {r: finalR, g: finalG, b: finalB, dimming: finalBrightness, speed: 100}
+			params: {r: finalR, g: finalG, b: finalB, dimming: finalBrightness}
 		});
 	}
 

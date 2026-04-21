@@ -12,10 +12,15 @@ All notable changes to this plugin are documented here. The format follows
   paused. Changes to the setting are applied live via `onIdleSceneChanged`.
 - `Max Updates Per Second` setting — bounds UDP send rate to prevent WIZ
   firmware from dropping packets.
+- `Use White LED For Whites` setting — on RGBW / RGBCW bulbs, near-white
+  colors are routed through the dedicated cool or warm white LED (detected
+  from the module name) instead of the R+G+B LEDs, which gives a cleaner
+  output than R+G+B mixing.
 - Device health tracking: each controller records the last time the device
   responded and exposes an `isOnline` flag.
-- QML device cards now show an online/offline status dot and dim offline
-  devices.
+- QML device cards now show an online/offline status dot, a color-coded
+  capability chip (RGB / RGBW / TW / DIMMING), the friendly product name
+  from the device library, and dim offline devices.
 
 ### Changed
 - `Publisher` updated to `RobThePCGuy` (fork maintainer). Original plugin by
@@ -23,6 +28,9 @@ All notable changes to this plugin are documented here. The format follows
 - `Version` bumped to `1.1.0`.
 - `WIZProtocol.setPilot` now throttles sends to the configured update rate in
   addition to the existing "skip if unchanged" guard.
+- `Initialize()` now names devices using the friendly `productName` from the
+  device library when available (e.g. `WIZ RGB Bulb A19 (Room 1)` instead of
+  `WIZ ESP01_SHRGB1C_31 Room: 1`).
 
 ### Fixed
 - README install link previously pointed to `github.com/yourusername/...` and

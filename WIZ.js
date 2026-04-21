@@ -23,6 +23,7 @@ colorTemp:readonly
 useColorTemp:readonly
 idleScene:readonly
 maxUpdateRate:readonly
+useWhiteChannel:readonly
 */
 
 export function ControllableParameters() {
@@ -37,6 +38,7 @@ export function ControllableParameters() {
 		{"property": "colorTemp", "group": "lighting", "label": "Color Temperature (K)", "min": "2200", "max": "6500", "type": "number", "default": "4000"},
 		{"property": "idleScene", "group": "settings", "label": "Idle Scene ID (0 = disabled)", "min": "0", "max": "32", "type": "number", "default": "0"},
 		{"property": "maxUpdateRate", "group": "settings", "label": "Max Updates Per Second", "min": "1", "max": "30", "type": "number", "default": "10"},
+		{"property": "useWhiteChannel", "group": "lighting", "label": "Use White LED For Whites (RGBW only)", "type": "boolean", "default": "false"},
 	];
 }
 
@@ -84,7 +86,10 @@ const WIZDeviceLibrary = {
 // Lifecycle
 export function Initialize() {
 	device.addFeature("udp");
-	device.setName(`WIZ ${controller.modelName || "Device"} Room: ${controller.roomId || "Unknown"}`);
+
+	const friendly = controller.wiztype?.productName || controller.modelName || "Device";
+	const roomSuffix = controller.roomId ? ` (Room ${controller.roomId})` : "";
+	device.setName(`WIZ ${friendly}${roomSuffix}`);
 
 	if (controller.isTW) {
 		device.removeProperty("forcedColor");
@@ -94,7 +99,12 @@ export function Initialize() {
 	device.setSize(1, 1);
 	device.setControllableLeds(["LED 1"], [[0, 0]]);
 
-	wizProtocol = new WIZProtocol(controller.ip, controller.port || WIZ_PORT, controller.isTW);
+	wizProtocol = new WIZProtocol(
+		controller.ip,
+		controller.port || WIZ_PORT,
+		controller.isTW,
+		controller.whiteChannel || null
+	);
 }
 
 export function Render() {
@@ -137,12 +147,30 @@ function hexToRgb(hex) {
 	];
 }
 
+// "Near white" means saturation is low enough that the bulb's dedicated
+// white LED will produce a cleaner output than R+G+B mixing.
+function isNearWhite(r, g, b) {
+	const maxChan = Math.max(r, g, b);
+	const minChan = Math.min(r, g, b);
+	return maxChan >= 200 && (maxChan - minChan) <= 25;
+}
+
 function safeJsonParse(str, fallback = null) {
 	try {
 		return JSON.parse(str);
 	} catch (e) {
 		return fallback;
 	}
+}
+
+// WIZ module names encode the white LED type after RGB: "SHRGB1C" = cool,
+// "SHRGB1W" = warm, "SHRGBCW" has both. Returns "c", "w", or null.
+function detectWhiteChannel(modelName) {
+	if (!modelName) return null;
+	if (/RGB\d*CW/i.test(modelName)) return "c";
+	if (/RGB\d*C(?!W)/i.test(modelName)) return "c";
+	if (/RGB\d*W/i.test(modelName)) return "w";
+	return null;
 }
 
 // Discovery Service
@@ -274,6 +302,7 @@ class WIZDevice {
 		this.modelName = data.moduleName || "Unknown";
 		this.isRGB = this.modelName.includes("RGB");
 		this.isTW = this.modelName.includes("TW");
+		this.whiteChannel = detectWhiteChannel(this.modelName);
 		this.deviceInfoLoaded = true;
 
 		if (WIZDeviceLibrary[this.modelName]) {
@@ -315,11 +344,12 @@ class WIZDevice {
 
 // WIZ Protocol Handler
 class WIZProtocol {
-	constructor(ip, port, isTW) {
+	constructor(ip, port, isTW, whiteChannel) {
 		this.ip = ip;
 		this.port = port;
 		this.isTW = isTW;
-		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1};
+		this.whiteChannel = whiteChannel || null;
+		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1, white: -1};
 		this.lastSendTime = 0;
 	}
 
@@ -374,6 +404,18 @@ class WIZProtocol {
 		const [finalR, finalG, finalB] = isOff ? hexToRgb(dimmColor) : [r, g, b];
 		const finalBrightness = isOff ? (minBrightness || 10) : brightness;
 
+		// On RGBW/RGBCW bulbs, near-whites look better through the dedicated
+		// white LED than through R+G+B mixing. Opt-in via setting.
+		if (useWhiteChannel && this.whiteChannel && !isOff && isNearWhite(finalR, finalG, finalB)) {
+			const whiteValue = Math.round((finalR + finalG + finalB) / 3);
+			lastState.white = whiteValue;
+			const params = {dimming: finalBrightness};
+			params[this.whiteChannel] = whiteValue;
+			this.send({method: "setPilot", params});
+			return;
+		}
+		lastState.white = -1;
+
 		this.send({
 			method: "setPilot",
 			params: {r: finalR, g: finalG, b: finalB, dimming: finalBrightness}
@@ -386,7 +428,7 @@ class WIZProtocol {
 
 	setScene(sceneId) {
 		if (!sceneId || sceneId < 1) return;
-		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1};
+		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1, white: -1};
 		this.send({method: "setPilot", params: {sceneId: Math.round(sceneId)}});
 	}
 

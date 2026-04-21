@@ -16,7 +16,9 @@ Control WIZ smart lights (Philips/Signify) through SignalRGB.
 - Optional forced color mode
 - Optional WIZ built-in scene when SignalRGB is idle
 - Rate-limited packet sending to prevent WIZ firmware drops
+- RGBW: route near-white colors through the dedicated white LED
 - Offline device detection
+- Friendly device names + capability chips (RGB / RGBW / TW) in the setup UI
 - Turn off lights on SignalRGB exit
 
 ## Installation
@@ -39,6 +41,7 @@ Or manually: copy `WIZ.js` and `WIZ.qml` to your SignalRGB plugins folder and re
 | Color Temperature (K) | Kelvin value used when color temperature mode is on |
 | Idle Scene ID | WIZ built-in scene used while streaming is paused (0 = disabled, applied live) |
 | Max Update Rate | Upper bound on packets per second sent to each device |
+| Use White LED For Whites | On RGBW bulbs, send near-white colors through the cool/warm white LED instead of R+G+B |
 
 ## How It Works
 

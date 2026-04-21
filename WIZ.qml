@@ -84,9 +84,26 @@ Item {
             model: service.controllers
 
             delegate: Item {
+                id: delegateRoot
                 width: 350
                 height: content.height
                 property var device: model.modelData.obj
+
+                // Friendly name falls back to the raw module code when no
+                // library entry exists. The capability string mirrors the
+                // RGB/TW/white-channel detection in WIZ.js.
+                property string friendlyName: (device.wiztype && device.wiztype.productName)
+                    ? device.wiztype.productName
+                    : device.modelName
+                property string capability: device.isRGB
+                    ? (device.whiteChannel ? "RGBW" : "RGB")
+                    : device.isTW ? "TW" : "DIMMING"
+                property color capabilityColor: {
+                    if (delegateRoot.capability === "RGBW") return "#2196F3";
+                    if (delegateRoot.capability === "RGB") return "#4CAF50";
+                    if (delegateRoot.capability === "TW") return "#FFC107";
+                    return theme.warn;
+                }
 
                 Rectangle {
                     anchors.fill: parent
@@ -101,7 +118,7 @@ Item {
                     padding: 15
                     spacing: 5
 
-                    // Header: name + status dot
+                    // Header: name + status dot + capability chip
                     Row {
                         spacing: 8
                         Rectangle {
@@ -111,8 +128,22 @@ Item {
                         }
                         Text {
                             color: theme.primarytextcolor
-                            text: device.modelName
+                            text: delegateRoot.friendlyName
                             font { pixelSize: 16; family: "Poppins"; weight: Font.Bold }
+                        }
+                        Rectangle {
+                            width: chipText.width + 12
+                            height: chipText.height + 4
+                            radius: 3
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: delegateRoot.capabilityColor
+                            Text {
+                                id: chipText
+                                anchors.centerIn: parent
+                                text: delegateRoot.capability
+                                color: "white"
+                                font { pixelSize: 10; family: "Poppins"; weight: Font.Bold }
+                            }
                         }
                         Text {
                             visible: !device.isOnline
@@ -121,6 +152,14 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
                             font { pixelSize: 12; family: "Poppins"; italic: true }
                         }
+                    }
+
+                    // Module code (if different from friendly name)
+                    Text {
+                        visible: device.wiztype && device.wiztype.productName
+                        color: theme.secondarytextcolor
+                        text: device.modelName
+                        font { pixelSize: 11; family: "Poppins"; italic: true }
                     }
 
                     // ID and Room
@@ -143,7 +182,9 @@ Item {
                     Text {
                         color: device.isRGB ? theme.secondarytextcolor : theme.warn
                         text: device.isRGB
-                            ? "Full RGB Color"
+                            ? (device.whiteChannel
+                                ? "Full RGB + " + (device.whiteChannel === "c" ? "Cool" : "Warm") + " White LED"
+                                : "Full RGB Color")
                             : device.isTW
                                 ? "Color Temperature (2200K-6500K)"
                                 : "Basic Dimming"

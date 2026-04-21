@@ -1,9 +1,9 @@
 export function Name() { return "WIZ Interface"; }
-export function Version() { return "1.0.0"; }
+export function Version() { return "1.1.0"; }
 export function VendorId() { return 0x0; }
 export function ProductId() { return 0x0; }
 export function Type() { return "network"; }
-export function Publisher() { return "GreenSky Productions"; }
+export function Publisher() { return "RobThePCGuy"; }
 export function Size() { return [1, 1]; }
 export function DefaultPosition() { return [75, 70]; }
 export function DefaultScale() { return 10.0; }
@@ -21,6 +21,9 @@ minBrightness:readonly
 dimmColor:readonly
 colorTemp:readonly
 useColorTemp:readonly
+idleScene:readonly
+maxUpdateRate:readonly
+useWhiteChannel:readonly
 */
 
 export function ControllableParameters() {
@@ -33,6 +36,9 @@ export function ControllableParameters() {
 		{"property": "dimmColor", "group": "lighting", "label": "Color when dimmed", "min": "0", "max": "360", "type": "color", "default": "#010101"},
 		{"property": "useColorTemp", "group": "lighting", "label": "Use Color Temperature", "type": "boolean", "default": "false"},
 		{"property": "colorTemp", "group": "lighting", "label": "Color Temperature (K)", "min": "2200", "max": "6500", "type": "number", "default": "4000"},
+		{"property": "idleScene", "group": "settings", "label": "Idle Scene ID (0 = disabled)", "min": "0", "max": "32", "type": "number", "default": "0"},
+		{"property": "maxUpdateRate", "group": "settings", "label": "Max Updates Per Second", "min": "1", "max": "30", "type": "number", "default": "10"},
+		{"property": "useWhiteChannel", "group": "lighting", "label": "Use White LED For Whites (RGBW only)", "type": "boolean", "default": "false"},
 	];
 }
 
@@ -45,15 +51,19 @@ const INITIAL_DISCOVERY_INTERVAL = 3000;
 const MAX_INITIAL_ATTEMPTS = 5;
 const WIZ_PORT = 38900;
 
-// Device Library - Common WIZ module names
+// Device Library - known WIZ module names observed in pywizlight's test
+// fixtures, Home Assistant's wiz component, and the original Govee-derived
+// plugin. Module name is returned by WIZ in `getSystemConfig`. The token
+// after the first underscore encodes the capability set:
+//   SHRGB* / DHRGB*  = RGB + tunable white (DH = dual-head fixture)
+//   SHTW* / TW*      = tunable white only (no color)
+//   SHDW* / DW*      = dimmable white only
+//   SOCKET / FANDIMS / DIMTRIACS = non-light accessories
 const WIZDeviceLibrary = {
+	// RGB + tunable white
 	"ESP03_SHRGB3_01ABI": {
 		productName: "WRGB LED Strip",
 		imageUrl: "https://www.assets.signify.com/is/image/Signify/WiFi-BLE-LEDstrip-2M-1600lm-startkit-SPP?wid=200&hei=200&qlt=100",
-	},
-	"ESP15_SHTW1C_01": {
-		productName: "Tunable White Bulb",
-		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?",
 	},
 	"ESP01_SHRGB1C_31": {
 		productName: "RGB Bulb A19",
@@ -63,24 +73,58 @@ const WIZDeviceLibrary = {
 		productName: "RGB Bulb",
 		imageUrl: "https://www.assets.signify.com/is/image/Signify/046677603548-?"
 	},
-	"ESP56_SHTW3_01": {
-		productName: "Tunable White BR30",
-		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?"
-	},
-	"ESP17_SHTW9_01": {
-		productName: "Tunable White A21",
-		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?"
-	},
+	"ESP01_SHRGB_03":    { productName: "RGB Bulb" },
+	"ESP20_SHRGB_01ABI": { productName: "RGB Bulb" },
+	"ESP20_SHRGB_01BT":  { productName: "RGB Bulb" },
+	"ESP20_SHRGBC_01":   { productName: "RGB Candle Bulb" },
+	"ESP01_DHRGB_03":    { productName: "Dual-Head RGB Fixture" },
+	"ESP20_DHRGB_01B":   { productName: "Dual-Head RGB Fixture" },
+
+	// RGBW (dedicated white LED in addition to RGB)
 	"ESP03_SHRGB1W_01": {
 		productName: "RGBW Bulb",
 		imageUrl: "https://www.assets.signify.com/is/image/Signify/046677603548-?"
-	}
+	},
+	"ESP24_SHRGBW_01": {
+		productName: "RGBW LED Strip",
+		imageUrl: "https://www.assets.signify.com/is/image/Signify/WiFi-BLE-LEDstrip-2M-1600lm-startkit-SPP?wid=200&hei=200&qlt=100"
+	},
+
+	// Tunable white only
+	"ESP15_SHTW1C_01": {
+		productName: "Tunable White Bulb",
+		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?",
+	},
+	"ESP14_SHTW1C_01": { productName: "Tunable White Bulb" },
+	"ESP56_SHTW3_01":  { productName: "Tunable White BR30" },
+	"ESP17_SHTW9_01":  { productName: "Tunable White A21" },
+	"ESP21_SHTW_01":   { productName: "Tunable White Filament Bulb" },
+	"ESP05_SHTW_21":   { productName: "Tunable White Bulb" },
+	"ESP01_TW_03":     { productName: "Tunable White Bulb" },
+
+	// Dimmable white only
+	"ESP05_SHDW_21":   { productName: "Dimmable White Filament Bulb" },
+	"ESP06_SHDW9_01":  { productName: "Dimmable White Bulb" },
+	"ESP01_DW_03":     { productName: "Dimmable White Bulb" },
+
+	// Accessories — discovered but not addressable as RGB. Kept here so the
+	// QML UI labels them correctly instead of showing raw module codes.
+	"ESP01_SOCKET_03": { productName: "Smart Plug" },
+	"ESP10_SOCKET_06": { productName: "Smart Plug" },
+	"ESP25_SOCKET_01": { productName: "Smart Plug (Power Metering)" },
+	"ESP01_DIMTRIACS_01": { productName: "In-Wall Triac Dimmer" },
+	"ESP03_FANDIMS_31":   { productName: "Smart Fan + Dimmable Light" },
+	"ESP20_FANDIMS_31":   { productName: "Smart Fan + Dimmable Light" },
 };
 
 // Lifecycle
 export function Initialize() {
 	device.addFeature("udp");
-	device.setName(`WIZ ${controller.modelName || "Device"} Room: ${controller.roomId || "Unknown"}`);
+
+	// Room ID from the WIZ app can be an arbitrary hash rather than a small
+	// number, so keep the name short and let users rename in SignalRGB's UI.
+	const friendly = controller.wiztype?.productName || controller.modelName || "Device";
+	device.setName(`WIZ ${friendly}`);
 
 	if (controller.isTW) {
 		device.removeProperty("forcedColor");
@@ -90,7 +134,12 @@ export function Initialize() {
 	device.setSize(1, 1);
 	device.setControllableLeds(["LED 1"], [[0, 0]]);
 
-	wizProtocol = new WIZProtocol(controller.ip, controller.port || WIZ_PORT, controller.isTW);
+	wizProtocol = new WIZProtocol(
+		controller.ip,
+		controller.port || WIZ_PORT,
+		controller.isTW,
+		controller.hasWhite === true
+	);
 }
 
 export function Render() {
@@ -98,6 +147,22 @@ export function Render() {
 
 	const color = forceColor ? hexToRgb(forcedColor) : device.color(0, 0);
 	wizProtocol.setPilot(color[0], color[1], color[2]);
+}
+
+export function onAutoStartStreamChanged() {
+	applyIdleScene();
+}
+
+export function onIdleSceneChanged() {
+	applyIdleScene();
+}
+
+function applyIdleScene() {
+	if (!wizProtocol) return;
+	if (AutoStartStream) return;
+	if (idleScene > 0) {
+		wizProtocol.setScene(idleScene);
+	}
 }
 
 export function Shutdown() {
@@ -117,12 +182,30 @@ function hexToRgb(hex) {
 	];
 }
 
+// "Near white" means saturation is low enough that the bulb's dedicated
+// white LED will produce a cleaner output than R+G+B mixing.
+function isNearWhite(r, g, b) {
+	const maxChan = Math.max(r, g, b);
+	const minChan = Math.min(r, g, b);
+	return maxChan >= 200 && (maxChan - minChan) <= 25;
+}
+
 function safeJsonParse(str, fallback = null) {
 	try {
 		return JSON.parse(str);
 	} catch (e) {
 		return fallback;
 	}
+}
+
+// Detect whether the module has any dedicated white LED (RGBW / RGBCW /
+// RGBC variants). Signify does not document whether the "C" or "W" suffix
+// maps to cool vs warm, so we treat it as a boolean and drive both `c`
+// and `w` when the user opts into white-channel mode — the unsupported
+// channel is silently ignored by the firmware.
+function hasWhiteChannel(modelName) {
+	if (!modelName) return false;
+	return /RGB\d*(CW|C|W)(_|$)/i.test(modelName);
 }
 
 // Discovery Service
@@ -212,6 +295,8 @@ class WIZDevice {
 		this.deviceInfoLoaded = false;
 		this.announced = false;
 		this.wiztype = null;
+		this.lastSeen = Date.now();
+		this.lastReportedOnline = true;
 
 		// Device info
 		this.homeId = 0;
@@ -223,7 +308,17 @@ class WIZDevice {
 		this.isTW = false;
 	}
 
+	// Three broadcast intervals (~3 min) without a reply marks the device stale.
+	get isOnline() {
+		return Date.now() - this.lastSeen < BROADCAST_INTERVAL * 3;
+	}
+
+	touch() {
+		this.lastSeen = Date.now();
+	}
+
 	updateWithValue(value) {
+		this.touch();
 		const data = safeJsonParse(value.response);
 		if (data) {
 			if (data.ip) this.ip = data.ip;
@@ -232,6 +327,7 @@ class WIZDevice {
 	}
 
 	setDeviceInfo(data) {
+		this.touch();
 		if (this.deviceInfoLoaded) return;
 
 		this.homeId = data.homeId || data.homeid || 0;
@@ -241,6 +337,7 @@ class WIZDevice {
 		this.modelName = data.moduleName || "Unknown";
 		this.isRGB = this.modelName.includes("RGB");
 		this.isTW = this.modelName.includes("TW");
+		this.hasWhite = hasWhiteChannel(this.modelName);
 		this.deviceInfoLoaded = true;
 
 		if (WIZDeviceLibrary[this.modelName]) {
@@ -267,16 +364,38 @@ class WIZDevice {
 			service.announceController(this);
 			this.announced = true;
 		}
+
+		// Re-render the QML card when the online flag flips; the getter over
+		// Date.now() is not reactive on its own.
+		if (this.announced) {
+			const online = this.isOnline;
+			if (online !== this.lastReportedOnline) {
+				this.lastReportedOnline = online;
+				service.updateController(this);
+			}
+		}
 	}
 }
 
 // WIZ Protocol Handler
 class WIZProtocol {
-	constructor(ip, port, isTW) {
+	constructor(ip, port, isTW, hasWhite) {
 		this.ip = ip;
 		this.port = port;
 		this.isTW = isTW;
-		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1};
+		this.hasWhite = !!hasWhite;
+		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1, white: -1};
+		this.lastSendTime = 0;
+	}
+
+	// WIZ firmware can drop packets above ~10 Hz; bound send rate per user setting.
+	shouldThrottle() {
+		const rate = Math.max(1, Math.min(30, maxUpdateRate || 10));
+		const minInterval = 1000 / rate;
+		const now = Date.now();
+		if (now - this.lastSendTime < minInterval) return true;
+		this.lastSendTime = now;
+		return false;
 	}
 
 	setPilot(r, g, b) {
@@ -291,6 +410,7 @@ class WIZProtocol {
 			if (lastState.temp === temp && lastState.brightness === brightness) {
 				return;
 			}
+			if (this.shouldThrottle()) return;
 
 			Object.assign(lastState, {r: -1, g: -1, b: -1, brightness, temp});
 
@@ -310,6 +430,7 @@ class WIZProtocol {
 		if (lastState.r === r && lastState.g === g && lastState.b === b && lastState.brightness === brightness) {
 			return;
 		}
+		if (this.shouldThrottle()) return;
 
 		Object.assign(lastState, {r, g, b, brightness, temp: -1});
 
@@ -317,6 +438,22 @@ class WIZProtocol {
 		const isOff = r < 1 && g < 1 && b < 1;
 		const [finalR, finalG, finalB] = isOff ? hexToRgb(dimmColor) : [r, g, b];
 		const finalBrightness = isOff ? (minBrightness || 10) : brightness;
+
+		// On RGBW / RGBCW bulbs, near-whites look better through the dedicated
+		// white LED than through R+G+B mixing. Opt-in via setting. We drive
+		// both `c` and `w` and zero the RGB channels — firmware ignores the
+		// white channel it doesn't have, and explicitly sending r=g=b=0
+		// prevents stale RGB values from bleeding through.
+		if (useWhiteChannel && this.hasWhite && !isOff && isNearWhite(finalR, finalG, finalB)) {
+			const whiteValue = Math.round((finalR + finalG + finalB) / 3);
+			lastState.white = whiteValue;
+			this.send({
+				method: "setPilot",
+				params: {r: 0, g: 0, b: 0, c: whiteValue, w: whiteValue, dimming: finalBrightness}
+			});
+			return;
+		}
+		lastState.white = -1;
 
 		this.send({
 			method: "setPilot",
@@ -326,6 +463,12 @@ class WIZProtocol {
 
 	setState(on) {
 		this.send({method: "setPilot", params: {state: on}});
+	}
+
+	setScene(sceneId) {
+		if (!sceneId || sceneId < 1) return;
+		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1, white: -1};
+		this.send({method: "setPilot", params: {sceneId: Math.round(sceneId)}});
 	}
 
 	send(command) {

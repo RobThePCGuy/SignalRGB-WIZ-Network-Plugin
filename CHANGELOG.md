@@ -1,0 +1,48 @@
+# Changelog
+
+All notable changes to this plugin are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.1.0] - 2026-04-21
+
+### Added
+- One-click install badge in the README using the `srgbmods.net` bridge URL.
+- `Idle Scene ID` setting — send a WIZ built-in scene ID when streaming is
+  paused. Changes to the setting are applied live via `onIdleSceneChanged`.
+- `Max Updates Per Second` setting — bounds UDP send rate to prevent WIZ
+  firmware from dropping packets.
+- `Use White LED For Whites` setting — on RGBW / RGBCW bulbs, near-white
+  colors are routed through the dedicated white LED(s) instead of the R+G+B
+  LEDs, which gives a cleaner white. The plugin sends both `c` and `w` at
+  the same value and explicitly zeros R+G+B so the bulb's unsupported white
+  channel is ignored and stale RGB values don't bleed through.
+- Device health tracking: each controller records the last time the device
+  responded and exposes an `isOnline` flag.
+- QML device cards now show an online/offline status dot, a color-coded
+  capability chip (RGB / RGBW / TW / DIMMING), the friendly product name
+  from the device library, and dim offline devices.
+
+### Changed
+- `Publisher` updated to `RobThePCGuy` (fork maintainer). Original plugin by
+  GreenSky Productions is credited in the README.
+- `Version` bumped to `1.1.0`.
+- `WIZProtocol.setPilot` now throttles sends to the configured update rate in
+  addition to the existing "skip if unchanged" guard.
+- `Initialize()` now names devices using the friendly `productName` from the
+  device library when available (e.g. `WIZ RGB Bulb A19 (Room 1)` instead of
+  `WIZ ESP01_SHRGB1C_31 Room: 1`).
+
+### Fixed
+- README install link previously pointed to `github.com/yourusername/...` and
+  would fail for every user. Now points at the correct repository.
+
+## [1.0.0] - initial
+
+- Automatic device discovery via UDP broadcast
+- RGB color control synced with SignalRGB effects
+- Brightness control with configurable minimum
+- Dim color fallback when effect is black/off
+- Optional forced color mode
+- Optional color temperature mode for tunable-white bulbs
+- Turn off lights on SignalRGB exit

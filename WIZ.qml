@@ -84,14 +84,32 @@ Item {
             model: service.controllers
 
             delegate: Item {
+                id: delegateRoot
                 width: 350
                 height: content.height
                 property var device: model.modelData.obj
+
+                // Friendly name falls back to the raw module code when no
+                // library entry exists. The capability string mirrors the
+                // RGB/TW/white-channel detection in WIZ.js.
+                property string friendlyName: (device.wiztype && device.wiztype.productName)
+                    ? device.wiztype.productName
+                    : device.modelName
+                property string capability: device.isRGB
+                    ? (device.hasWhite ? "RGBW" : "RGB")
+                    : device.isTW ? "TW" : "DIMMING"
+                property color capabilityColor: {
+                    if (delegateRoot.capability === "RGBW") return "#2196F3";
+                    if (delegateRoot.capability === "RGB") return "#4CAF50";
+                    if (delegateRoot.capability === "TW") return "#FFC107";
+                    return theme.warn;
+                }
 
                 Rectangle {
                     anchors.fill: parent
                     color: Qt.lighter(theme.background2, 1.3)
                     radius: 5
+                    opacity: device.isOnline ? 1.0 : 0.55
                 }
 
                 Column {
@@ -100,11 +118,48 @@ Item {
                     padding: 15
                     spacing: 5
 
-                    // Device Name
+                    // Header: name + status dot + capability chip
+                    Row {
+                        spacing: 8
+                        Rectangle {
+                            width: 10; height: 10; radius: 5
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: device.isOnline ? "#4CAF50" : theme.warn
+                        }
+                        Text {
+                            color: theme.primarytextcolor
+                            text: delegateRoot.friendlyName
+                            font { pixelSize: 16; family: "Poppins"; weight: Font.Bold }
+                        }
+                        Rectangle {
+                            width: chipText.width + 12
+                            height: chipText.height + 4
+                            radius: 3
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: delegateRoot.capabilityColor
+                            Text {
+                                id: chipText
+                                anchors.centerIn: parent
+                                text: delegateRoot.capability
+                                color: "white"
+                                font { pixelSize: 10; family: "Poppins"; weight: Font.Bold }
+                            }
+                        }
+                        Text {
+                            visible: !device.isOnline
+                            color: theme.warn
+                            text: "(offline)"
+                            anchors.verticalCenter: parent.verticalCenter
+                            font { pixelSize: 12; family: "Poppins"; italic: true }
+                        }
+                    }
+
+                    // Module code (if different from friendly name)
                     Text {
-                        color: theme.primarytextcolor
+                        visible: device.wiztype && device.wiztype.productName
+                        color: theme.secondarytextcolor
                         text: device.modelName
-                        font { pixelSize: 16; family: "Poppins"; weight: Font.Bold }
+                        font { pixelSize: 11; family: "Poppins"; italic: true }
                     }
 
                     // ID and Room
@@ -127,7 +182,7 @@ Item {
                     Text {
                         color: device.isRGB ? theme.secondarytextcolor : theme.warn
                         text: device.isRGB
-                            ? "Full RGB Color"
+                            ? (device.hasWhite ? "Full RGB + Dedicated White LED" : "Full RGB Color")
                             : device.isTW
                                 ? "Color Temperature (2200K-6500K)"
                                 : "Basic Dimming"

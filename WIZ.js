@@ -1,9 +1,9 @@
 export function Name() { return "WIZ Interface"; }
-export function Version() { return "1.0.0"; }
+export function Version() { return "1.1.0"; }
 export function VendorId() { return 0x0; }
 export function ProductId() { return 0x0; }
 export function Type() { return "network"; }
-export function Publisher() { return "GreenSky Productions"; }
+export function Publisher() { return "RobThePCGuy"; }
 export function Size() { return [1, 1]; }
 export function DefaultPosition() { return [75, 70]; }
 export function DefaultScale() { return 10.0; }
@@ -21,6 +21,8 @@ minBrightness:readonly
 dimmColor:readonly
 colorTemp:readonly
 useColorTemp:readonly
+idleScene:readonly
+maxUpdateRate:readonly
 */
 
 export function ControllableParameters() {
@@ -33,6 +35,8 @@ export function ControllableParameters() {
 		{"property": "dimmColor", "group": "lighting", "label": "Color when dimmed", "min": "0", "max": "360", "type": "color", "default": "#010101"},
 		{"property": "useColorTemp", "group": "lighting", "label": "Use Color Temperature", "type": "boolean", "default": "false"},
 		{"property": "colorTemp", "group": "lighting", "label": "Color Temperature (K)", "min": "2200", "max": "6500", "type": "number", "default": "4000"},
+		{"property": "idleScene", "group": "settings", "label": "Idle Scene (0 = off)", "min": "0", "max": "32", "type": "number", "default": "0"},
+		{"property": "maxUpdateRate", "group": "settings", "label": "Max Updates Per Second", "min": "1", "max": "30", "type": "number", "default": "10"},
 	];
 }
 
@@ -98,6 +102,13 @@ export function Render() {
 
 	const color = forceColor ? hexToRgb(forcedColor) : device.color(0, 0);
 	wizProtocol.setPilot(color[0], color[1], color[2]);
+}
+
+export function onAutoStartStreamChanged() {
+	if (!wizProtocol) return;
+	if (!AutoStartStream && idleScene > 0) {
+		wizProtocol.setScene(idleScene);
+	}
 }
 
 export function Shutdown() {
@@ -212,6 +223,7 @@ class WIZDevice {
 		this.deviceInfoLoaded = false;
 		this.announced = false;
 		this.wiztype = null;
+		this.lastSeen = Date.now();
 
 		// Device info
 		this.homeId = 0;
@@ -223,7 +235,17 @@ class WIZDevice {
 		this.isTW = false;
 	}
 
+	// Three broadcast intervals (~3 min) without a reply marks the device stale.
+	get isOnline() {
+		return Date.now() - this.lastSeen < BROADCAST_INTERVAL * 3;
+	}
+
+	touch() {
+		this.lastSeen = Date.now();
+	}
+
 	updateWithValue(value) {
+		this.touch();
 		const data = safeJsonParse(value.response);
 		if (data) {
 			if (data.ip) this.ip = data.ip;
@@ -232,6 +254,7 @@ class WIZDevice {
 	}
 
 	setDeviceInfo(data) {
+		this.touch();
 		if (this.deviceInfoLoaded) return;
 
 		this.homeId = data.homeId || data.homeid || 0;
@@ -277,6 +300,17 @@ class WIZProtocol {
 		this.port = port;
 		this.isTW = isTW;
 		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1};
+		this.lastSendTime = 0;
+	}
+
+	// WIZ firmware can drop packets above ~10 Hz; bound send rate per user setting.
+	shouldThrottle() {
+		const rate = Math.max(1, Math.min(30, maxUpdateRate || 10));
+		const minInterval = 1000 / rate;
+		const now = Date.now();
+		if (now - this.lastSendTime < minInterval) return true;
+		this.lastSendTime = now;
+		return false;
 	}
 
 	setPilot(r, g, b) {
@@ -291,6 +325,7 @@ class WIZProtocol {
 			if (lastState.temp === temp && lastState.brightness === brightness) {
 				return;
 			}
+			if (this.shouldThrottle()) return;
 
 			Object.assign(lastState, {r: -1, g: -1, b: -1, brightness, temp});
 
@@ -310,6 +345,7 @@ class WIZProtocol {
 		if (lastState.r === r && lastState.g === g && lastState.b === b && lastState.brightness === brightness) {
 			return;
 		}
+		if (this.shouldThrottle()) return;
 
 		Object.assign(lastState, {r, g, b, brightness, temp: -1});
 
@@ -326,6 +362,12 @@ class WIZProtocol {
 
 	setState(on) {
 		this.send({method: "setPilot", params: {state: on}});
+	}
+
+	setScene(sceneId) {
+		if (!sceneId || sceneId < 1) return;
+		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1};
+		this.send({method: "setPilot", params: {sceneId: Math.round(sceneId)}});
 	}
 
 	send(command) {

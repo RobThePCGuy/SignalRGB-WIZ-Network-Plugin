@@ -14,13 +14,16 @@ Control WIZ smart lights (Philips/Signify) through SignalRGB.
 - Brightness control with configurable minimum
 - Dim color fallback when effect is black/off
 - Optional forced color mode
+- Optional WIZ built-in scene when SignalRGB is idle
+- Rate-limited packet sending to prevent WIZ firmware drops
+- Offline device detection
 - Turn off lights on SignalRGB exit
 
 ## Installation
 
-[Click here to install](signalrgb://install?url=https://github.com/yourusername/SignalRGB-WIZ-Network-Plugin)
+[![Add to SignalRGB](https://raw.githubusercontent.com/SRGBmods/QMK-Images/main/images/add-to-signalrgb.png)](https://srgbmods.net/s?p=addon/install?url=https://github.com/RobThePCGuy/SignalRGB-WIZ-Network-Plugin)
 
-Or manually: Copy `WIZ.js` and `WIZ.qml` to your SignalRGB plugins folder and restart.
+Or manually: copy `WIZ.js` and `WIZ.qml` to your SignalRGB plugins folder and restart SignalRGB.
 
 ## Settings
 
@@ -32,6 +35,10 @@ Or manually: Copy `WIZ.js` and `WIZ.qml` to your SignalRGB plugins folder and re
 | Forced Color | The color to use when Force Color is enabled |
 | Minimum Brightness | Lowest brightness level (1-100%) |
 | Color when dimmed | Color shown when effect outputs black |
+| Use Color Temperature | Send temperature instead of RGB (RGB-TW hybrid bulbs) |
+| Color Temperature (K) | Kelvin value used when color temperature mode is on |
+| Idle Scene | WIZ built-in scene used while streaming is paused (0 = off) |
+| Max Update Rate | Upper bound on packets per second sent to each device |
 
 ## How It Works
 
@@ -47,7 +54,6 @@ The plugin works with any WIZ RGB or RGBW device. Tunable White (TW) devices hav
 ## Known Limitations
 
 - Single LED per device (no segment control for LED strips)
-- No white color temperature control
 - No device grouping support
 
 ## Troubleshooting
@@ -63,5 +69,6 @@ The plugin works with any WIZ RGB or RGBW device. Tunable White (TW) devices hav
 
 ## Credits
 
+- Original plugin by GreenSky Productions
 - Based on the [SignalRGB Govee Plugin](https://gitlab.com/signalrgb/Govee)
 - WIZ protocol info from [openHAB WIZ Binding](https://github.com/openhab/openhab-addons)

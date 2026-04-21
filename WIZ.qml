@@ -92,6 +92,7 @@ Item {
                     anchors.fill: parent
                     color: Qt.lighter(theme.background2, 1.3)
                     radius: 5
+                    opacity: device.isOnline ? 1.0 : 0.55
                 }
 
                 Column {
@@ -100,11 +101,26 @@ Item {
                     padding: 15
                     spacing: 5
 
-                    // Device Name
-                    Text {
-                        color: theme.primarytextcolor
-                        text: device.modelName
-                        font { pixelSize: 16; family: "Poppins"; weight: Font.Bold }
+                    // Header: name + status dot
+                    Row {
+                        spacing: 8
+                        Rectangle {
+                            width: 10; height: 10; radius: 5
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: device.isOnline ? "#4CAF50" : theme.warn
+                        }
+                        Text {
+                            color: theme.primarytextcolor
+                            text: device.modelName
+                            font { pixelSize: 16; family: "Poppins"; weight: Font.Bold }
+                        }
+                        Text {
+                            visible: !device.isOnline
+                            color: theme.warn
+                            text: "(offline)"
+                            anchors.verticalCenter: parent.verticalCenter
+                            font { pixelSize: 12; family: "Poppins"; italic: true }
+                        }
                     }
 
                     // ID and Room

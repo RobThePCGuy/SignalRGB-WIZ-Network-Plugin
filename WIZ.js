@@ -51,15 +51,19 @@ const INITIAL_DISCOVERY_INTERVAL = 3000;
 const MAX_INITIAL_ATTEMPTS = 5;
 const WIZ_PORT = 38900;
 
-// Device Library - Common WIZ module names
+// Device Library - known WIZ module names observed in pywizlight's test
+// fixtures, Home Assistant's wiz component, and the original Govee-derived
+// plugin. Module name is returned by WIZ in `getSystemConfig`. The token
+// after the first underscore encodes the capability set:
+//   SHRGB* / DHRGB*  = RGB + tunable white (DH = dual-head fixture)
+//   SHTW* / TW*      = tunable white only (no color)
+//   SHDW* / DW*      = dimmable white only
+//   SOCKET / FANDIMS / DIMTRIACS = non-light accessories
 const WIZDeviceLibrary = {
+	// RGB + tunable white
 	"ESP03_SHRGB3_01ABI": {
 		productName: "WRGB LED Strip",
 		imageUrl: "https://www.assets.signify.com/is/image/Signify/WiFi-BLE-LEDstrip-2M-1600lm-startkit-SPP?wid=200&hei=200&qlt=100",
-	},
-	"ESP15_SHTW1C_01": {
-		productName: "Tunable White Bulb",
-		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?",
 	},
 	"ESP01_SHRGB1C_31": {
 		productName: "RGB Bulb A19",
@@ -69,14 +73,14 @@ const WIZDeviceLibrary = {
 		productName: "RGB Bulb",
 		imageUrl: "https://www.assets.signify.com/is/image/Signify/046677603548-?"
 	},
-	"ESP56_SHTW3_01": {
-		productName: "Tunable White BR30",
-		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?"
-	},
-	"ESP17_SHTW9_01": {
-		productName: "Tunable White A21",
-		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?"
-	},
+	"ESP01_SHRGB_03":    { productName: "RGB Bulb" },
+	"ESP20_SHRGB_01ABI": { productName: "RGB Bulb" },
+	"ESP20_SHRGB_01BT":  { productName: "RGB Bulb" },
+	"ESP20_SHRGBC_01":   { productName: "RGB Candle Bulb" },
+	"ESP01_DHRGB_03":    { productName: "Dual-Head RGB Fixture" },
+	"ESP20_DHRGB_01B":   { productName: "Dual-Head RGB Fixture" },
+
+	// RGBW (dedicated white LED in addition to RGB)
 	"ESP03_SHRGB1W_01": {
 		productName: "RGBW Bulb",
 		imageUrl: "https://www.assets.signify.com/is/image/Signify/046677603548-?"
@@ -84,7 +88,33 @@ const WIZDeviceLibrary = {
 	"ESP24_SHRGBW_01": {
 		productName: "RGBW LED Strip",
 		imageUrl: "https://www.assets.signify.com/is/image/Signify/WiFi-BLE-LEDstrip-2M-1600lm-startkit-SPP?wid=200&hei=200&qlt=100"
-	}
+	},
+
+	// Tunable white only
+	"ESP15_SHTW1C_01": {
+		productName: "Tunable White Bulb",
+		imageUrl: "https://www.assets.signify.com/is/image/PhilipsLighting/929002383532-?",
+	},
+	"ESP14_SHTW1C_01": { productName: "Tunable White Bulb" },
+	"ESP56_SHTW3_01":  { productName: "Tunable White BR30" },
+	"ESP17_SHTW9_01":  { productName: "Tunable White A21" },
+	"ESP21_SHTW_01":   { productName: "Tunable White Filament Bulb" },
+	"ESP05_SHTW_21":   { productName: "Tunable White Bulb" },
+	"ESP01_TW_03":     { productName: "Tunable White Bulb" },
+
+	// Dimmable white only
+	"ESP05_SHDW_21":   { productName: "Dimmable White Filament Bulb" },
+	"ESP06_SHDW9_01":  { productName: "Dimmable White Bulb" },
+	"ESP01_DW_03":     { productName: "Dimmable White Bulb" },
+
+	// Accessories — discovered but not addressable as RGB. Kept here so the
+	// QML UI labels them correctly instead of showing raw module codes.
+	"ESP01_SOCKET_03": { productName: "Smart Plug" },
+	"ESP10_SOCKET_06": { productName: "Smart Plug" },
+	"ESP25_SOCKET_01": { productName: "Smart Plug (Power Metering)" },
+	"ESP01_DIMTRIACS_01": { productName: "In-Wall Triac Dimmer" },
+	"ESP03_FANDIMS_31":   { productName: "Smart Fan + Dimmable Light" },
+	"ESP20_FANDIMS_31":   { productName: "Smart Fan + Dimmable Light" },
 };
 
 // Lifecycle

@@ -96,7 +96,7 @@ Item {
                     ? device.wiztype.productName
                     : device.modelName
                 property string capability: device.isRGB
-                    ? (device.whiteChannel ? "RGBW" : "RGB")
+                    ? (device.hasWhite ? "RGBW" : "RGB")
                     : device.isTW ? "TW" : "DIMMING"
                 property color capabilityColor: {
                     if (delegateRoot.capability === "RGBW") return "#2196F3";
@@ -182,9 +182,7 @@ Item {
                     Text {
                         color: device.isRGB ? theme.secondarytextcolor : theme.warn
                         text: device.isRGB
-                            ? (device.whiteChannel
-                                ? "Full RGB + " + (device.whiteChannel === "c" ? "Cool" : "Warm") + " White LED"
-                                : "Full RGB Color")
+                            ? (device.hasWhite ? "Full RGB + Dedicated White LED" : "Full RGB Color")
                             : device.isTW
                                 ? "Color Temperature (2200K-6500K)"
                                 : "Basic Dimming"

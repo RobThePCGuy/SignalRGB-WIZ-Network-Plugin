@@ -13,9 +13,10 @@ All notable changes to this plugin are documented here. The format follows
 - `Max Updates Per Second` setting — bounds UDP send rate to prevent WIZ
   firmware from dropping packets.
 - `Use White LED For Whites` setting — on RGBW / RGBCW bulbs, near-white
-  colors are routed through the dedicated cool or warm white LED (detected
-  from the module name) instead of the R+G+B LEDs, which gives a cleaner
-  output than R+G+B mixing.
+  colors are routed through the dedicated white LED(s) instead of the R+G+B
+  LEDs, which gives a cleaner white. The plugin sends both `c` and `w` at
+  the same value and explicitly zeros R+G+B so the bulb's unsupported white
+  channel is ignored and stale RGB values don't bleed through.
 - Device health tracking: each controller records the last time the device
   responded and exposes an `isOnline` flag.
 - QML device cards now show an online/offline status dot, a color-coded

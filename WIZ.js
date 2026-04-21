@@ -103,7 +103,7 @@ export function Initialize() {
 		controller.ip,
 		controller.port || WIZ_PORT,
 		controller.isTW,
-		controller.whiteChannel || null
+		controller.hasWhite === true
 	);
 }
 
@@ -163,14 +163,14 @@ function safeJsonParse(str, fallback = null) {
 	}
 }
 
-// WIZ module names encode the white LED type after RGB: "SHRGB1C" = cool,
-// "SHRGB1W" = warm, "SHRGBCW" has both. Returns "c", "w", or null.
-function detectWhiteChannel(modelName) {
-	if (!modelName) return null;
-	if (/RGB\d*CW/i.test(modelName)) return "c";
-	if (/RGB\d*C(?!W)/i.test(modelName)) return "c";
-	if (/RGB\d*W/i.test(modelName)) return "w";
-	return null;
+// Detect whether the module has any dedicated white LED (RGBW / RGBCW /
+// RGBC variants). Signify does not document whether the "C" or "W" suffix
+// maps to cool vs warm, so we treat it as a boolean and drive both `c`
+// and `w` when the user opts into white-channel mode — the unsupported
+// channel is silently ignored by the firmware.
+function hasWhiteChannel(modelName) {
+	if (!modelName) return false;
+	return /RGB\d*(CW|C|W)(_|$)/i.test(modelName);
 }
 
 // Discovery Service
@@ -302,7 +302,7 @@ class WIZDevice {
 		this.modelName = data.moduleName || "Unknown";
 		this.isRGB = this.modelName.includes("RGB");
 		this.isTW = this.modelName.includes("TW");
-		this.whiteChannel = detectWhiteChannel(this.modelName);
+		this.hasWhite = hasWhiteChannel(this.modelName);
 		this.deviceInfoLoaded = true;
 
 		if (WIZDeviceLibrary[this.modelName]) {
@@ -344,11 +344,11 @@ class WIZDevice {
 
 // WIZ Protocol Handler
 class WIZProtocol {
-	constructor(ip, port, isTW, whiteChannel) {
+	constructor(ip, port, isTW, hasWhite) {
 		this.ip = ip;
 		this.port = port;
 		this.isTW = isTW;
-		this.whiteChannel = whiteChannel || null;
+		this.hasWhite = !!hasWhite;
 		this.lastState = {r: -1, g: -1, b: -1, brightness: -1, temp: -1, white: -1};
 		this.lastSendTime = 0;
 	}
@@ -404,14 +404,18 @@ class WIZProtocol {
 		const [finalR, finalG, finalB] = isOff ? hexToRgb(dimmColor) : [r, g, b];
 		const finalBrightness = isOff ? (minBrightness || 10) : brightness;
 
-		// On RGBW/RGBCW bulbs, near-whites look better through the dedicated
-		// white LED than through R+G+B mixing. Opt-in via setting.
-		if (useWhiteChannel && this.whiteChannel && !isOff && isNearWhite(finalR, finalG, finalB)) {
+		// On RGBW / RGBCW bulbs, near-whites look better through the dedicated
+		// white LED than through R+G+B mixing. Opt-in via setting. We drive
+		// both `c` and `w` and zero the RGB channels — firmware ignores the
+		// white channel it doesn't have, and explicitly sending r=g=b=0
+		// prevents stale RGB values from bleeding through.
+		if (useWhiteChannel && this.hasWhite && !isOff && isNearWhite(finalR, finalG, finalB)) {
 			const whiteValue = Math.round((finalR + finalG + finalB) / 3);
 			lastState.white = whiteValue;
-			const params = {dimming: finalBrightness};
-			params[this.whiteChannel] = whiteValue;
-			this.send({method: "setPilot", params});
+			this.send({
+				method: "setPilot",
+				params: {r: 0, g: 0, b: 0, c: whiteValue, w: whiteValue, dimming: finalBrightness}
+			});
 			return;
 		}
 		lastState.white = -1;

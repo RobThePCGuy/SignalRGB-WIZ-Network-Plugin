@@ -80,6 +80,10 @@ const WIZDeviceLibrary = {
 	"ESP03_SHRGB1W_01": {
 		productName: "RGBW Bulb",
 		imageUrl: "https://www.assets.signify.com/is/image/Signify/046677603548-?"
+	},
+	"ESP24_SHRGBW_01": {
+		productName: "RGBW LED Strip",
+		imageUrl: "https://www.assets.signify.com/is/image/Signify/WiFi-BLE-LEDstrip-2M-1600lm-startkit-SPP?wid=200&hei=200&qlt=100"
 	}
 };
 
@@ -87,9 +91,10 @@ const WIZDeviceLibrary = {
 export function Initialize() {
 	device.addFeature("udp");
 
+	// Room ID from the WIZ app can be an arbitrary hash rather than a small
+	// number, so keep the name short and let users rename in SignalRGB's UI.
 	const friendly = controller.wiztype?.productName || controller.modelName || "Device";
-	const roomSuffix = controller.roomId ? ` (Room ${controller.roomId})` : "";
-	device.setName(`WIZ ${friendly}${roomSuffix}`);
+	device.setName(`WIZ ${friendly}`);
 
 	if (controller.isTW) {
 		device.removeProperty("forcedColor");

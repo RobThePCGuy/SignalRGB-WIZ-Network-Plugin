@@ -37,7 +37,7 @@ Or manually: copy `WIZ.js` and `WIZ.qml` to your SignalRGB plugins folder and re
 | Color when dimmed | Color shown when effect outputs black |
 | Use Color Temperature | Send temperature instead of RGB (RGB-TW hybrid bulbs) |
 | Color Temperature (K) | Kelvin value used when color temperature mode is on |
-| Idle Scene | WIZ built-in scene used while streaming is paused (0 = off) |
+| Idle Scene ID | WIZ built-in scene used while streaming is paused (0 = disabled, applied live) |
 | Max Update Rate | Upper bound on packets per second sent to each device |
 
 ## How It Works

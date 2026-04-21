@@ -8,7 +8,8 @@ All notable changes to this plugin are documented here. The format follows
 
 ### Added
 - One-click install badge in the README using the `srgbmods.net` bridge URL.
-- `Idle Scene` setting — send a WIZ built-in scene ID when streaming is paused.
+- `Idle Scene ID` setting — send a WIZ built-in scene ID when streaming is
+  paused. Changes to the setting are applied live via `onIdleSceneChanged`.
 - `Max Updates Per Second` setting — bounds UDP send rate to prevent WIZ
   firmware from dropping packets.
 - Device health tracking: each controller records the last time the device

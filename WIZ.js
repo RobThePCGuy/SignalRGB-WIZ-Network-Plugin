@@ -35,7 +35,7 @@ export function ControllableParameters() {
 		{"property": "dimmColor", "group": "lighting", "label": "Color when dimmed", "min": "0", "max": "360", "type": "color", "default": "#010101"},
 		{"property": "useColorTemp", "group": "lighting", "label": "Use Color Temperature", "type": "boolean", "default": "false"},
 		{"property": "colorTemp", "group": "lighting", "label": "Color Temperature (K)", "min": "2200", "max": "6500", "type": "number", "default": "4000"},
-		{"property": "idleScene", "group": "settings", "label": "Idle Scene (0 = off)", "min": "0", "max": "32", "type": "number", "default": "0"},
+		{"property": "idleScene", "group": "settings", "label": "Idle Scene ID (0 = disabled)", "min": "0", "max": "32", "type": "number", "default": "0"},
 		{"property": "maxUpdateRate", "group": "settings", "label": "Max Updates Per Second", "min": "1", "max": "30", "type": "number", "default": "10"},
 	];
 }
@@ -105,8 +105,17 @@ export function Render() {
 }
 
 export function onAutoStartStreamChanged() {
+	applyIdleScene();
+}
+
+export function onIdleSceneChanged() {
+	applyIdleScene();
+}
+
+function applyIdleScene() {
 	if (!wizProtocol) return;
-	if (!AutoStartStream && idleScene > 0) {
+	if (AutoStartStream) return;
+	if (idleScene > 0) {
 		wizProtocol.setScene(idleScene);
 	}
 }
@@ -224,6 +233,7 @@ class WIZDevice {
 		this.announced = false;
 		this.wiztype = null;
 		this.lastSeen = Date.now();
+		this.lastReportedOnline = true;
 
 		// Device info
 		this.homeId = 0;
@@ -289,6 +299,16 @@ class WIZDevice {
 			service.updateController(this);
 			service.announceController(this);
 			this.announced = true;
+		}
+
+		// Re-render the QML card when the online flag flips; the getter over
+		// Date.now() is not reactive on its own.
+		if (this.announced) {
+			const online = this.isOnline;
+			if (online !== this.lastReportedOnline) {
+				this.lastReportedOnline = online;
+				service.updateController(this);
+			}
 		}
 	}
 }
